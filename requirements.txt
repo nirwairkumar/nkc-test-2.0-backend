@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+pydantic
+pydantic-settings
+supabase
+python-dotenv
+python-multipart
+email-validator
+httpx>=0.24.0
+python-jose[cryptography]
+passlib[bcrypt]
+pytest
+google-generativeai
+youtube-transcript-api
