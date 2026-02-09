@@ -1,0 +1,11 @@
+name = "nkc-test-2-backend"
+main = "app/main.py"
+compatibility_date = "2024-04-03"
+compatibility_flags = ["python_workers"]
+
+# Cloudflare will automatically map these to environment variables
+# Note: Sensitive keys (SUPABASE_KEY, SUPABASE_SERVICE_KEY, GEMINI_API_KEY) 
+# should be added via the Cloudflare Dashboard as "Secrets" for security.
+[vars]
+SUPABASE_URL = "https://ajxtouqthtdenhqcvdft.supabase.co"
+# SECRET_KEY = "your-secret-key"
