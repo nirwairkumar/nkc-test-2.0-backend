@@ -4,7 +4,7 @@ pydantic-settings
 supabase
 python-multipart
 email-validator
-httpx>=0.24.0
+httpx
 python-jose
 passlib
 google-generativeai
