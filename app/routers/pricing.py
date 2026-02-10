@@ -171,3 +171,85 @@ async def apply_promo(payload: ApplyPromoRequest, db: Client = Depends(get_db)):
     except Exception as e:
         print(f"Error applying promo: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# --- Global Premium Settings Endpoints ---
+
+@router.get("/settings")
+async def get_premium_settings(db: Client = Depends(get_db)):
+    """Get global premium unlock settings"""
+    try:
+        response = db.table("app_settings").select("*").limit(1).execute()
+        if response.data and len(response.data) > 0:
+            return response.data[0]
+        # Return default if no settings exist
+        return {"unlock_all_premium": False}
+    except Exception as e:
+        print(f"Error fetching premium settings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class UpdateSettingsRequest(BaseModel):
+    unlock_all_premium: bool
+
+@router.put("/settings")
+async def update_premium_settings(payload: UpdateSettingsRequest, db: Client = Depends(get_db)):
+    """Update global premium unlock settings (admin only)"""
+    try:
+        # Get the first (and should be only) settings row
+        settings_res = db.table("app_settings").select("id").limit(1).execute()
+        
+        if settings_res.data and len(settings_res.data) > 0:
+            settings_id = settings_res.data[0]["id"]
+            # Update existing settings
+            response = db.table("app_settings").update({
+                "unlock_all_premium": payload.unlock_all_premium
+            }).eq("id", settings_id).execute()
+            
+            if response.data:
+                return response.data[0]
+        else:
+            # Insert new settings if none exist
+            response = db.table("app_settings").insert({
+                "unlock_all_premium": payload.unlock_all_premium
+            }).execute()
+            
+            if response.data:
+                return response.data[0]
+        
+        raise HTTPException(status_code=500, detail="Failed to update settings")
+    except Exception as e:
+        print(f"Error updating premium settings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/check-premium-access")
+async def check_premium_access(db: Client = Depends(get_db)):
+    """
+    Check if premium features should be accessible.
+    Returns access status based on:
+    1. Global unlock setting
+    2. Active plans count
+    3. User's subscription status
+    """
+    try:
+        # Check global unlock setting
+        settings_res = db.table("app_settings").select("unlock_all_premium").limit(1).execute()
+        unlock_all = False
+        if settings_res.data and len(settings_res.data) > 0:
+            unlock_all = settings_res.data[0].get("unlock_all_premium", False)
+        
+        # Check if any active plans exist
+        plans_res = db.table("plans").select("id").eq("is_active", True).limit(1).execute()
+        has_active_plans = plans_res.data and len(plans_res.data) > 0
+        
+        # Count total active plans
+        all_plans_res = db.table("plans").select("id", count="exact").eq("is_active", True).execute()
+        active_plans_count = all_plans_res.count if all_plans_res.count is not None else 0
+        
+        return {
+            "unlock_all_premium": unlock_all,
+            "has_active_plans": has_active_plans,
+            "active_plans_count": active_plans_count,
+            "premium_accessible": unlock_all or not has_active_plans
+        }
+    except Exception as e:
+        print(f"Error checking premium access: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
