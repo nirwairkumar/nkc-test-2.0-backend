@@ -79,7 +79,8 @@ async def generate_youtube_test(
                - Highlight common mistakes or traps if mentioned
                - Keep language simple and exam-oriented
             4. **Generate as many MCQs as possible** (minimum 10) based strictly on the content.
-            
+            5. You can use LaTeX for mathematical equations (e.g., \( E = mc^2 \)). Markdown formatting is also supported to help you create the best test experience.
+
             IMPORTANT: Output **ONLY** valid raw JSON.
             
             JSON Structure:
@@ -123,6 +124,9 @@ async def generate_youtube_test(
                - Highlight common mistakes or traps if mentioned
                - Keep language simple and exam-oriented
             3. **Extract(if questions present in the video)** or **Generate as many MCQs as possible** (minimum 10) based strictly on the content.
+            4. You can use LaTeX for mathematical equations (e.g., \( E = mc^2 \)). Markdown formatting is also supported to help you create the best test experience.
+
+
 
             Output **ONLY** valid raw JSON.
             JSON Structure:
@@ -226,3 +230,41 @@ async def generate_youtube_test(
     except Exception as e:
         print(f"AI Generation Error: {e}")
         raise HTTPException(status_code=500, detail=f"AI Generation Failed: {str(e)}")
+
+# --- NEW: PDF Parsing Endpoint (Merged from legacy backend/main.py) ---
+from fastapi import UploadFile, File
+from utils.logger import get_logger
+from ai_preview_importer.preview_pipeline_v2 import run_preview_pipeline_with_feature_flag
+
+logger = get_logger("ai_router")
+
+@router.post("/parse")
+async def parse_document(file: UploadFile = File(...)):
+    """
+    Parses an uploaded PDF/Image and returns structured questions.
+    Now integrated into the main API under /api/ai/parse.
+    """
+    logger.info(f"Received file for AI processing: {file.filename}")
+    
+    try:
+        # 1. Validation
+        if not file.filename.lower().endswith(('.pdf', '.png', '.jpg', '.jpeg')):
+             raise HTTPException(status_code=400, detail="Invalid file type. Only PDF and Images allowed.")
+
+        # 2. Read File
+        file_bytes = await file.read()
+        logger.info(f"File size: {len(file_bytes)} bytes")
+        
+        # 3. Run Enhanced Preview Pipeline
+        result = await run_preview_pipeline_with_feature_flag(file_bytes)
+        
+        # 4. Return Result
+        logger.info("Parsing complete. Returning response.")
+        return result
+
+    except ValueError as ve:
+        logger.error(f"Validation Error: {str(ve)}")
+        raise HTTPException(status_code=500, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Server Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal Server Error during processing. \n Error: {str(e)}")

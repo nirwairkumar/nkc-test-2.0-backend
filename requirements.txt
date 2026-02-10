@@ -12,3 +12,8 @@ passlib[bcrypt]
 pytest
 google-generativeai
 youtube-transcript-api
+PyMuPDF
+pdfplumber
+Pillow
+numpy
+opencv-python-headless

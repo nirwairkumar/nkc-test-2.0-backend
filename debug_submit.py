@@ -3,8 +3,9 @@ from dotenv import load_dotenv
 import os
 from supabase import create_client, Client
 
-# Explicit path to ensure it loads
-load_dotenv(dotenv_path="d:\\Yuga Yatra\\nkc-Test-platform\\backend\\.env")
+# Load .env file (look in current directory or parent)
+dotenv_path = os.path.join(os.path.dirname(__file__), ".env")
+load_dotenv(dotenv_path=dotenv_path)
 
 url = os.environ.get("SUPABASE_URL")
 key = os.environ.get("SUPABASE_KEY")
