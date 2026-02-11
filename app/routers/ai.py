@@ -231,20 +231,26 @@ async def generate_youtube_test(
         print(f"AI Generation Error: {e}")
         raise HTTPException(status_code=500, detail=f"AI Generation Failed: {str(e)}")
 
-# --- NEW: PDF Parsing Endpoint (Merged from legacy backend/main.py) ---
-from fastapi import UploadFile, File
+# --- PDF Parsing Endpoint (Gemini Full-Page Vision Pipeline) ---
+from fastapi import UploadFile, File, Query
 from utils.logger import get_logger
-from ai_preview_importer.preview_pipeline_v2 import run_preview_pipeline_with_feature_flag
+from ai_preview_importer.pdf_vision_pipeline import process_pdf
 
 logger = get_logger("ai_router")
 
 @router.post("/parse")
-async def parse_document(file: UploadFile = File(...)):
+async def parse_document(
+    file: UploadFile = File(...),
+    mode: str = Query("extract", regex="^(extract|generate)$", description="Processing mode: 'extract' to keep exact questions, 'generate' to create new ones")
+):
     """
-    Parses an uploaded PDF/Image and returns structured questions.
-    Now integrated into the main API under /api/ai/parse.
+    Parses an uploaded PDF and returns structured questions.
+    
+    Modes:
+    - extract: Extract exact questions from the exam paper as-is
+    - generate: Create new original MCQs based on the PDF content
     """
-    logger.info(f"Received file for AI processing: {file.filename}")
+    logger.info(f"Received file for AI processing: {file.filename} (mode: {mode})")
     
     try:
         # 1. Validation
@@ -255,16 +261,16 @@ async def parse_document(file: UploadFile = File(...)):
         file_bytes = await file.read()
         logger.info(f"File size: {len(file_bytes)} bytes")
         
-        # 3. Run Enhanced Preview Pipeline
-        result = await run_preview_pipeline_with_feature_flag(file_bytes)
+        # 3. Run Vision Pipeline
+        result = await process_pdf(file_bytes, mode=mode)
         
         # 4. Return Result
-        logger.info("Parsing complete. Returning response.")
+        logger.info(f"Parsing complete ({mode} mode). Returning {len(result.get('questions', []))} questions.")
         return result
 
     except ValueError as ve:
-        logger.error(f"Validation Error: {str(ve)}")
+        logger.error(f"Validation/Pipeline Error: {str(ve)}")
         raise HTTPException(status_code=500, detail=str(ve))
     except Exception as e:
         logger.error(f"Server Error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Internal Server Error during processing. \n Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
