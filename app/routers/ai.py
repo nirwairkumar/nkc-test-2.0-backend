@@ -79,7 +79,7 @@ async def generate_youtube_test(
                - Highlight common mistakes or traps if mentioned
                - Keep language simple and exam-oriented
             4. **Generate as many MCQs as possible** (minimum 10) based strictly on the content.
-            5. You can use LaTeX for mathematical equations (e.g., \( E = mc^2 \)). Markdown formatting is also supported to help you create the best test experience.
+            5. You can use LaTeX for mathematical equations (e.g., \\( E = mc^2 \\)). Markdown formatting is also supported to help you create the best test experience.
 
             IMPORTANT: Output **ONLY** valid raw JSON.
             
@@ -124,7 +124,7 @@ async def generate_youtube_test(
                - Highlight common mistakes or traps if mentioned
                - Keep language simple and exam-oriented
             3. **Extract(if questions present in the video)** or **Generate as many MCQs as possible** (minimum 10) based strictly on the content.
-            4. You can use LaTeX for mathematical equations (e.g., \( E = mc^2 \)). Markdown formatting is also supported to help you create the best test experience.
+            4. You can use LaTeX for mathematical equations (e.g., \\( E = mc^2 \\)). Markdown formatting is also supported to help you create the best test experience.
 
 
 
@@ -231,38 +231,67 @@ async def generate_youtube_test(
         print(f"AI Generation Error: {e}")
         raise HTTPException(status_code=500, detail=f"AI Generation Failed: {str(e)}")
 
-# --- PDF Parsing Endpoint (Gemini Full-Page Vision Pipeline) ---
+# --- PDF/Image Parsing Endpoint (Gemini Full-Page Vision Pipeline) ---
 from fastapi import UploadFile, File, Query
 from utils.logger import get_logger
-from ai_preview_importer.pdf_vision_pipeline import process_pdf
+from ai_preview_importer.pdf_vision_pipeline import process_files
 
 logger = get_logger("ai_router")
 
 @router.post("/parse")
 async def parse_document(
-    file: UploadFile = File(...),
+    files: List[UploadFile] = File(..., description="Upload PDF or image files"),
+    answer_key: Optional[UploadFile] = File(None, description="Optional answer key file (PDF or image)"),
     mode: str = Query("extract", regex="^(extract|generate)$", description="Processing mode: 'extract' to keep exact questions, 'generate' to create new ones")
 ):
     """
-    Parses an uploaded PDF and returns structured questions.
+    Parses uploaded PDF/image files and returns structured questions.
+    Supports multiple files (images and/or PDFs) and an optional answer key for correct answer matching.
     
     Modes:
     - extract: Extract exact questions from the exam paper as-is
-    - generate: Create new original MCQs based on the PDF content
+    - generate: Create new original MCQs based on the content
     """
-    logger.info(f"Received file for AI processing: {file.filename} (mode: {mode})")
+    logger.info(f"Received {len(files)} file(s) for AI processing (mode: {mode})")
+    
+    if answer_key:
+        logger.info(f"Answer key file received: {answer_key.filename}")
     
     try:
         # 1. Validation
-        if not file.filename.lower().endswith(('.pdf', '.png', '.jpg', '.jpeg')):
-             raise HTTPException(status_code=400, detail="Invalid file type. Only PDF and Images allowed.")
-
-        # 2. Read File
-        file_bytes = await file.read()
-        logger.info(f"File size: {len(file_bytes)} bytes")
+        valid_extensions = ('.pdf', '.png', '.jpg', '.jpeg', '.webp')
+        for file in files:
+            if not file.filename or not file.filename.lower().endswith(valid_extensions):
+                raise HTTPException(status_code=400, detail=f"Invalid file type: {file.filename}. Only PDF, PNG, JPG, JPEG, WEBP allowed.")
         
+        if answer_key and answer_key.filename:
+            if not answer_key.filename.lower().endswith(valid_extensions):
+                raise HTTPException(status_code=400, detail="Invalid answer key file type. Only PDF and Images allowed.")
+
+        # 2. Read Files
+        file_data = []
+        for file in files:
+            content = await file.read()
+            file_data.append({
+                "filename": file.filename,
+                "content": content,
+                "content_type": file.content_type
+            })
+            logger.info(f"File '{file.filename}' size: {len(content)} bytes")
+        
+        # Read answer key if provided
+        answer_key_data = None
+        if answer_key:
+            answer_key_content = await answer_key.read()
+            answer_key_data = {
+                "filename": answer_key.filename,
+                "content": answer_key_content,
+                "content_type": answer_key.content_type
+            }
+            logger.info(f"Answer key '{answer_key.filename}' size: {len(answer_key_content)} bytes")
+
         # 3. Run Vision Pipeline
-        result = await process_pdf(file_bytes, mode=mode)
+        result = await process_files(file_data, mode=mode, answer_key=answer_key_data)
         
         # 4. Return Result
         logger.info(f"Parsing complete ({mode} mode). Returning {len(result.get('questions', []))} questions.")
